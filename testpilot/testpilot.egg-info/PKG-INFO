@@ -1,0 +1,112 @@
+Metadata-Version: 2.4
+Name: testpilot
+Version: 0.1.0
+Summary: An agent that writes, runs and repairs pytest suites with NVIDIA Nemotron on Nebius Token Factory
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: openai>=1.40
+Requires-Dist: pytest>=8
+Requires-Dist: pytest-cov>=5
+Provides-Extra: demo
+Requires-Dist: streamlit>=1.35; extra == "demo"
+Dynamic: license-file
+
+# 🧪 TestPilot
+
+**An agent that writes, runs and repairs pytest suites for your Python code, powered by NVIDIA Nemotron on Nebius Token Factory.**
+
+Track: **Coding and Agentic Engineering** · Nebius x NVIDIA Global AI Hackathon 2026
+
+Writing tests is the chore everyone skips. TestPilot reads a Python module, drafts a full pytest suite from the code's names, docstrings and type hints, runs it in a sandbox, and then reasons about every failure: is the *test* wrong, or is your *code* wrong? It fixes bad tests, keeps tests that expose real bugs (marked `xfail` with the reason), and reports coverage at the end.
+
+## How it works
+
+```
+your_module.py
+      │
+      ▼
+ Nemotron 3 Nano ──► draft pytest suite
+      │
+      ▼
+ sandbox run (pytest + coverage) ──► all green? ──► done ✅
+      │ failures
+      ▼
+ Nemotron triage: test_bug or code_bug?
+      │
+      ├─ test_bug ─► rewrite the test
+      └─ code_bug ─► keep it, mark xfail, report the bug 🐞
+      │
+      ▼
+ last repair round escalates to Nemotron 3 Super
+```
+
+## Where Nemotron and Token Factory are used
+
+| Step | Model (via Token Factory) | Why |
+|---|---|---|
+| Draft tests | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | Fast and cheap for bulk code generation |
+| Triage failures | Nano, then Super on the final round | Distinguishes broken tests from real bugs |
+| Repair tests | Nano, escalating to `nvidia/nemotron-3-super-120b-a12b` | Stronger reasoning only when the cheap model is stuck, so credits stretch further |
+
+All calls go through Token Factory's OpenAI-compatible endpoint (`https://api.tokenfactory.nebius.com/v1/`). Model IDs can be swapped with env vars (`TESTPILOT_FAST_MODEL`, `TESTPILOT_STRONG_MODEL`), e.g. to try `nvidia/Nemotron-3-Ultra-550b-a55b`.
+
+## Setup
+
+```bash
+git clone https://github.com/Chetan0246/testpilot.git
+cd testpilot
+pip install -r requirements.txt
+export NEBIUS_API_KEY=your-key   # from tokenfactory.nebius.com → API keys
+# or, backup: export NVIDIA_API_KEY=nvapi-...   # from build.nvidia.com (same Nemotron models)
+```
+
+## Run it
+
+CLI:
+```bash
+python -m testpilot examples/inventory.py
+```
+
+Web demo:
+```bash
+streamlit run app.py
+```
+
+The `examples/inventory.py` module has three planted bugs (accepts zero quantity, leaves empty items behind, returns items unsorted). TestPilot should flag them.
+
+Example output (illustrative, replace with your own run):
+```
+Drafting tests for inventory.py with nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B ...
+Round 1: 9 passed, 3 failed, 0 errors, coverage 96%
+  Bug suspected in your code -> test_items_sorted: items() does not sort names
+  ...
+Round 2: 9 passed, 0 failed, 0 errors, coverage 96%
+
+TestPilot report for inventory.py
+Likely bugs in your code:
+  - test_items_sorted: items() does not sort names
+```
+
+## Project layout
+
+```
+testpilot/llm.py      Token Factory client, model routing, token usage tracking
+testpilot/agent.py    the draft → run → triage → repair loop
+testpilot/runner.py   isolated pytest + coverage runner
+testpilot/cli.py      command line interface
+app.py                Streamlit demo
+examples/             sample module with planted bugs
+tests/                offline tests for the agent loop (scripted fake LLM, no key needed)
+```
+
+Run TestPilot's own tests: `pytest`
+
+## Safety note
+
+Generated tests execute the module under test on your machine (in a temp directory, with a timeout). Only point TestPilot at code you trust.
+
+## License
+
+MIT
